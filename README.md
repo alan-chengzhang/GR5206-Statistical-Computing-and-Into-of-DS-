@@ -2,6 +2,7 @@
 Course material for GR5206
 
   Please be aware that there materials can just be used for personal study. DO NOT use them for profit.
+  
   It is the first of a serises of three elective courses in the data science track of M.A. in statistics program in Columbia University.
   In this repo, there are slides, R scripts for the slides, homeworks and labs with my personal answers and keys.
 
