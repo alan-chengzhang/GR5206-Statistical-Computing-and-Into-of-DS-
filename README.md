@@ -21,7 +21,7 @@ At the end of the semester students will have:
   
 
 ------------------------------------------------------------------------------------------------------------------------------
-The following are the topics of these course:
+The following are the topics of this course:
 
   Introduction to R and RStudio. Working with data in R.
   
