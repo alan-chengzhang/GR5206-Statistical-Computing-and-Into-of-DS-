@@ -1,0 +1,312 @@
+---
+title: "Assignment 8"
+author: "Cheng Zhang   cz2532"
+date: "December 30, 2018"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+---
+
+Goals: explore various optimization algorithms for forming statistical esti-
+mates in linear regression.
+
+1. Run the following code block to create synthetic regression data, with 100 observations
+and 10 predictor variables:
+```{r}
+n <- 100
+p <- 10
+s <- 3
+set.seed(0)
+x <- matrix(rnorm(n*p), n, p)
+b <- c(-0.7, 0.7, 1, rep(0, p-s))
+y <- x %*% b + rt(n, df=2)
+```
+Notice that only 3 of the 10 predictor variables in total are actually relevant in predicting
+the response. (That is, only the first three coefficients in b are nonzero.) Examine the
+correlation coefficients between predictor variables x and the response y; would you be able
+to pick out each of the 3 relevant variables based on correlations alone?
+
+
+```{r}
+cor(x,y)
+
+```
+
+##### No I cannot pick them up
+
+
+2. Note that the noise in the above simulation (the difference between y and x %*% b)
+was created from the rt() function, which draws t-distributed random variables. The t-
+distribution has thicker tails than the normal distribution, so we are more likely to see
+large noise terms than we would if we used a normal distribution. Verify this by plotting
+the normal density and the t-density on the same plot, with the latter having 3 degrees of
+freedom. Choose the plot ranges appropriately, and draw the densities in different colors,
+so that the plot is easy to read.
+```{r}
+x1 =seq(-10,10,0.001)
+y1 = dnorm(x1)
+plot(x1,y1,type = "l", col="red")
+curve(dt(x,df=3),x1,add=TRUE)
+
+
+```
+
+
+3. Because we know that the noise in our regression has thicker tails than the normal
+distribution, we are more likely to see outliers. Hence we're going to use the Huber loss
+function, which is more robust to outliers:
+```{r}
+psi <- function(r, c = 1) {
+return(ifelse(r^2 > c^2, 2*c*abs(r) - c^2, r^2))
+}
+
+```
+
+Write a function called huber.loss() that takes in as an argument a coeffecient vector
+beta, and returns the sum of psi() applied to the residuals (from regressing y on x). x and
+y should not be provided as arguments, but referred to directly in the function. You may
+stick with the default cutoff of c=1. This Huber loss is going to take the place of the usual
+(nonrobust) linear regression loss, i.e., the sum of squares of the residuals.
+```{r}
+# the function should have no return
+
+huber.loss<-function(beta){
+  residual = y - x %*% beta
+  sum(psi(r=residual))
+}
+
+```
+
+
+4.
+Using the grad.descent() function from lecture, run gradient descent starting from
+beta = rep(0, p), to get an estimate of the coefficients beta that minimize the Huber
+loss, when regressing y on x. Use the settings max.iter = 200, step.size = 0.001, and
+stopping.deriv = 0.1. Store the output of grad.descent() in gd. How many iterations
+did it take to converge, and what are the final coefficient estimates?
+
+```{r}
+
+
+library("numDeriv")
+
+grad.descent <- function(f, x0, max.iter = 200, step.size = 0.05, stopping.deriv = 0.01, ...) {
+  
+  n    <- length(x0)
+  xmat <- matrix(0, nrow = n, ncol = max.iter)
+  xmat[,1] <- x0
+  
+  for (k in 2:max.iter) {
+    # Calculate the gradient
+    grad.cur <- grad(f, xmat[ ,k-1], ...) 
+    
+    # Should we stop?
+    if (all(abs(grad.cur) < stopping.deriv)) {
+      k <- k-1; break
+    }
+    
+    # Move in the opposite direction of the grad
+    xmat[ ,k] <- xmat[ ,k-1] - step.size * grad.cur
+  }
+  
+  xmat <- xmat[ ,1:k] # Trim
+  return(list(x = xmat[,k], xmat = xmat, k = k))
+}
+
+gd <- grad.descent(huber.loss, x0 = rep(0,p), max.iter=200, step.size=0.001, stopping.deriv=0.1)
+gd$k
+gd$x
+
+```
+
+
+
+5. Using gd, construct a vector obj of the values objective function encountered at each step
+of gradient descent. Note: here the objective function for minimization is the Huber loss.
+Plot these values against the iteration number, to confirm that gradient descent is indeed
+making the objective function at each iteration. How does the progress of the algorithm
+compare at the start (early iterations) versus towards the end (later iterations)?
+
+
+```{r}
+# objective function: loss function
+
+obj <- apply(gd$xmat, 2, huber.loss)
+
+plot(1:gd$k, obj, xlab = "Number", ylab = "Objective Function", type = "l", main = "Objective")
+
+##### The value of the object function decrease fast before 40 iteration. However, after that the value decrease very slow.
+
+```
+
+
+6. Rerun gradient descent as in question 4, but with step.size = 0.1. Compute the new
+criterion values across iterations, and plot the last fifty criterion values. What do you notice
+now? Is the criterion decreasing at each step, and has gradient descent converged at the
+end (settled on a single criterion value)? What can you deduce from your plot is happening
+to the coefficient estimates (confirm this by looking at the xmat values in gd)?
+
+```{r}
+# criterion values : value of loss function 
+
+gd2 <- grad.descent(huber.loss, x0 = rep(0,p), max.iter=200, step.size=0.1, stopping.deriv=0.1)
+gd2$k
+gd2$x
+x1 = (gd2$k-49):gd2$k
+y1 = apply(gd2$xmat[,(gd2$k-49):gd2$k], 2, huber.loss)
+plot(x1, y1,type = "l" ,xlab = "Number", ylab = "Objective Function", main = "last 50 criterion")
+
+#gd2$xmat[,x1]
+
+```
+
+##### The gredient descent dose not coverge to one point. Because the step size is to big, the value object function shows a seaonal feature that can not hit the point that minimize the loss function but just get values around that.
+
+
+
+7. Inspect the coefficients from the first gradient descent run (stored in gd), and compare
+them to the true (unknown) underlying coefficients b constructed in question 1. They should
+be pretty close for the first 3 variables, but the next 7 are not very accurate|that is, they're
+not all close to 0, as they should be. In order to fix this, we're going to apply a sparsifed
+version of gradient descent (formally known as proximal gradient descent).
+Modify the function grad.descent() so that at every iteration k, after taking a gradient
+step but before saving the new estimated coefficients, we threshold small values in these
+coefficients to zero. Here small means less than or equal to 0.05, in absolute value. Call
+the new function sparse.grad.descent() and rerun with the same settings as in question
+4, in order to produce a sparse estimate of the regression coefficients. Stores the results in
+gd.sparse. What are the final coeffecient estimates?
+
+```{r}
+#after taking a gradient step but before saving the new estimated coefficients, we threshold small values in these coefficients to zero. Here small means less than or equal to 0.05, in absolute value
+
+gd$x
+b
+
+
+sparse.grad.descent <- function(f, x0, max.iter = 200, step.size = 0.05, stopping.deriv = 0.01, ...) {
+  
+  n    <- length(x0)
+  xmat <- matrix(0, nrow = n, ncol = max.iter)
+  xmat[,1] <- x0
+  
+  for (k in 2:max.iter) {
+    # Calculate the gradient
+    grad.cur <- grad(f, xmat[ ,k-1], ...) 
+    
+    # Should we stop?
+    if (all(abs(grad.cur) < stopping.deriv)) {
+      k <- k-1; break
+    }
+    
+    # Move in the opposite direction of the grad
+    update <- xmat[ ,k-1] - step.size * grad.cur      # new
+    update[abs(update)<0.05] <- 0                     # new
+    xmat[,k] <- update                                # new
+  }
+  
+  xmat <- xmat[ ,1:k] # Trim
+  return(list(x = xmat[,k], xmat = xmat, k = k))
+}
+
+gd3 <- sparse.grad.descent(huber.loss, x0 = rep(0,p), max.iter=200, step.size=0.001, stopping.deriv=0.1)
+gd3$x
+
+```
+
+##### The first three values of the great descent are close to the true b, but all the other values are not very close to 0.
+
+
+8. Now compute estimates of the regression coefficients in the usual manner, using lm().
+How do these compare to those from question 4, from question 7? Compute the mean
+squared error between each of these three estimates of the coefficients and the true coeffi-
+cients b. Which is best?
+
+```{r}
+lm1 <- lm(y~x)
+lm1$coef[-1]
+gd$x
+gd3$x
+
+mse.loss <- function(beta) {
+  mean((b - beta)^2)
+}
+mse.loss(lm1$coef[-1])
+mse.loss(gd$x)
+mse.loss(gd3$x)
+
+```
+
+##### The linear model coefficients is closest to the regular gradient descent
+##### the third one, which is sparsified gredient descent is the best with the smallest MSE
+
+
+
+9. Rerun your Huber loss minimization in questions 4 and 7, but on diffierent data. That
+is, just generate another copy of y, per the same formula as you used in question 1: y = x
+%*% b + rt(n, df=2). How do the new coefficient estimates look from gradient descent,
+and sparsified gradient descent? Which has a better mean squared error when measured
+against the b used to generate data in question 1? What do you deduce about the sparse
+method (e.g., what does this suggest about the variability of its estimates)?
+In order to ensure that your results are comparable to other students', please run the
+following before generating a new y vector:
+set.seed(10)
+
+
+```{r}
+set.seed(10)
+y = x %*% b + rt(n, df=2)
+gd4 <- grad.descent(huber.loss, x0 = rep(0,p), max.iter=200, step.size=0.001, stopping.deriv=0.1)
+gd5 <- sparse.grad.descent(huber.loss, x0 = rep(0,p), max.iter=200, step.size=0.001, stopping.deriv=0.1)
+gd4$x
+gd5$x
+mse.loss(gd4$x)
+mse.loss(gd5$x)
+
+```
+
+##### The the mean squared error of the grad.descent is smaller, so it is better
+##### On this condition,the spare method can set certain parameters to be zero, which will increase the error terms. It shows that this method is not vert roubust which may because of the existance of threshold that will arbitary set some beta to zero.
+
+
+10. Repeat the experiment from question 9, generating 10 new copies of y, running gradient
+descent and sparse gradient descent, and recording each time the mean squared errors of
+each of their coefficient estimates to b. Report the average mean squared error, for gradient
+descent, and its sparse variant, over the 10 trials. Which average lower? Also report the
+minimum mean squared error, for the two methods, over the 10 trials. Which is lower? Is
+this in line with your interpretation of the variability associated with the sparse gradient
+descent method?
+
+```{r}
+gd_d_mse_10 <- c()
+gd_s_mse_10 <- c()
+for (i in 1:10){
+  y <- x %*% b + rt(n, df=2)
+  gd_d <- grad.descent(huber.loss, x0 = rep(0,p), max.iter=200, step.size=0.001, stopping.deriv=0.1)
+  gd_s <- sparse.grad.descent(huber.loss, x0 = rep(0,p), max.iter=200, step.size=0.001, stopping.deriv=0.1)
+  gd_d_mse <- mse.loss(gd_d$x)
+  gd_s_mse <- mse.loss(gd_s$x)
+  
+  gd_d_mse_10 <- c(gd_d_mse_10,gd_d_mse)
+  gd_s_mse_10 <- c(gd_s_mse_10,gd_s_mse)
+}
+
+mean(gd_d_mse_10)
+mean(gd_s_mse_10)
+
+min(gd_d_mse_10)
+min(gd_s_mse_10)
+```
+
+
+##### The varability of the spare gredient descent is much bigger, which is the same as previous question. By looking at the min value, it has smaller min value, it variance it higher.
+
+
+
+
+
+
+
+
+
+
